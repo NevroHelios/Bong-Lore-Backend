@@ -38,8 +38,7 @@ const withAuth = (fn: Function) => (req: Request, res: Response, next: (err?: an
 };
 
 // Routes
-router.post("/createpost", upload.array('mediaFiles', 20), asyncHandler(createPostsWrapper));
-router.post("/createpost", upload.single('media'), asyncHandler(createPostWrapper));
+router.post("/createpost", upload.array('media', 20), asyncHandler(createPostsWrapper));
 
 // Get posts with filtering options
 router.get("/", asyncHandler(getPosts));
