@@ -1,0 +1,16 @@
+// For updating all instances in collectioncontroller.ts
+
+// Pattern 1: 
+// From:
+// const user = await req.civicAuth.getUser();
+// if (!user?.name) {
+//     return res.status(401).json({ message: 'User not authenticated' });
+// }
+// const existingUser = await User.findOne({ name: user.name });
+
+// To:
+// const user = req.user;
+// if (!user?.name) {
+//     return res.status(401).json({ message: 'User not authenticated' });
+// }
+// const existingUser = await User.findOne({ _id: user._id });
