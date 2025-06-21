@@ -49,7 +49,7 @@ export const createposts = async (req: MulterRequest, res: Response) => {
             console.log("FILE URL", fileurl);
         }        // Get user information
         const user = req.user;
-        if (!user?.name) {
+        if (!user) {
             return res.status(401).json({ message: 'User not authenticated' });
         }
 
@@ -120,8 +120,8 @@ export const createposts = async (req: MulterRequest, res: Response) => {
         let postLocation;
         if (req.body.latitude && req.body.longitude) {
             postLocation = {
-                coordinates : [parseFloat(req.body.latitude), parseFloat(req.body.longitude)],
-                type: req.body.locationName || "Point"
+                type: "Point",
+                coordinates : [parseFloat(req.body.longitude), parseFloat(req.body.latitude)],
             };
         }
 
