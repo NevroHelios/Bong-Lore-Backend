@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from '@google/genai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -11,13 +11,17 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Initialize Gemini AI with API key
-const apiKey = process.env.GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(apiKey || '');
-const MODEL_NAME = process.env.VISION_MODEL_NAME!;
+const apiKey = process.env.GEMINI_API_KEY!;
+if (!apiKey) {
+  throw new Error('GEMINI_API_KEY is not set in the environment variables.');
+}
+const genAI = new GoogleGenAI({apiKey : apiKey});;
+const VISION_MODEL_NAME = process.env.VISION_MODEL_NAME || 'gemini-pro-vision';
+const EMBEDDING_MODEL_NAME = 'embedding-001';
 
 // Pre-defined Bengali culture related tags
 // These represent specific aspects of Bengali culture, arts, traditions, etc.
-const BENGALI_CULTURE_TAGS = {
+export const BENGALI_CULTURE_TAGS = {
   // Art & Crafts
   art: [
     'alpana', 'kantha-stitch', 'patachitra', 'terracotta', 'shola-art', 
@@ -96,7 +100,27 @@ const BENGALI_CULTURE_TAGS = {
 };
 
 // Flatten all tags into a single array
-const ALL_BENGALI_TAGS = Object.values(BENGALI_CULTURE_TAGS).flat();
+export const ALL_BENGALI_TAGS = Object.values(BENGALI_CULTURE_TAGS).flat();
+
+/**
+ * Helper to safely extract JSON from Gemini's response.
+ * It handles markdown code blocks and direct JSON output.
+ */
+function extractJson<T>(text: string, fallback: T): T {
+  try {
+    const match = text.match(/```json\n([\s\S]*?)\n```|(\{[\s\S]*\})|(\[[\s\S]*\])/);
+    if (match) {
+      const jsonString = match[1] || match[2] || match[3];
+      if (jsonString) {
+        return JSON.parse(jsonString) as T;
+      }
+    }
+    return JSON.parse(text) as T;
+  } catch (e) {
+    console.error("Failed to parse JSON from response, returning fallback.", text);
+    return fallback;
+  }
+}
 
 /**
  * Convert an image file to a base64 data URI
@@ -125,6 +149,75 @@ async function fileToGenerativePart(filePath: string): Promise<any> {
 }
 
 /**
+ * Generate a text embedding for a given string.
+ */
+export async function generateTextEmbedding(text: string): Promise<number[] | null> {
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    console.log("Skipping text embedding for empty input.");
+    return null;
+  }
+  try {
+    const response = await genAI.models.embedContent({
+      model: 'gemini-embedding-exp-03-07',
+      contents: text,
+    });
+    if (response.embeddings && response.embeddings.length > 0 && response.embeddings[0].values) {
+      return response.embeddings[0].values;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error generating text embedding:', error);
+    return null;
+  }
+}
+
+/**
+ * Generate a multimodal embedding.
+ * Note: This is a simplified version that embeds a textual description of the media.
+ * True multimodal embedding would require a specific multimodal embedding model.
+ */
+export async function generateMultimodalEmbedding(filePath: string, description?: string): Promise<number[] | null> {
+  try {
+    const textToEmbed = `Visual content: ${path.basename(filePath)}. Description: ${description || 'No description provided.'}`;
+    const response = await genAI.models.embedContent({
+      model: 'gemini-embedding-exp-03-07',
+      contents: textToEmbed,
+    });
+    if (response.embeddings && response.embeddings.length > 0 && response.embeddings[0].values) {
+      return response.embeddings[0].values;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error generating multimodal embedding:', error);
+    return null;
+  }
+}
+
+/**
+ * Generate a culturally-aware text embedding.
+ */
+export async function generateCulturalEmbedding(text: string): Promise<number[] | null> {
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    console.log("Skipping cultural embedding for empty input.");
+    return null;
+  }
+  try {
+    const textToEmbed = `Cultural context of Bengal: ${text}`;
+    const response = await genAI.models.embedContent({
+      model: 'gemini-embedding-exp-03-07',
+      contents: textToEmbed,
+    });
+    if (response.embeddings && response.embeddings.length > 0 && response.embeddings[0].values) {
+      return response.embeddings[0].values;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error generating cultural embedding:', error);
+    return null;
+  }
+}
+
+/**
  * Generate tags for an image or video from a given file path
  */
 export async function generateTagsForMedia(
@@ -139,7 +232,6 @@ export async function generateTagsForMedia(
     }
 
     // Create model and prepare prompt
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
     const generativePart = await fileToGenerativePart(filePath);
 
     // Extract file extension for context
@@ -175,71 +267,49 @@ ${ALL_BENGALI_TAGS.join(', ')}
 
 If the ${mediaType} includes specific Bengali cultural elements not in the list, you may suggest up to 2 additional tags.
 
-Return ONLY the selected tags in a JSON array format. No explanations or other text.
-Format: ["tag1", "tag2", "tag3", ...]`;
+Return ONLY a valid JSON array of strings. If no relevant tags are found, return an empty array [].
+Example: ["tag1", "tag2", ...]`;
 
     // Send to Gemini
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [
-          { text: basePrompt },
-          generativePart
-        ]
-      }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 200,
-      },
-      safetySettings
+    const result = await genAI.models.generateContent({
+      model: VISION_MODEL_NAME,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: basePrompt },
+            generativePart
+          ]
+        }
+      ]
     });
 
     // Process the response
-    const responseText = result.response.text();
+    const responseText = result.text ?? '';
+    let tags = extractJson<string[]>(responseText, []);
+    tags = [...new Set(tags.filter(tag => typeof tag === 'string'))].slice(0, 12);
     
-    // Extract JSON array from response
-    const jsonMatch = responseText.match(/\[.*?\]/s);
-    if (!jsonMatch) {
-      console.error('No valid JSON array found in the response:', responseText);
-      return [];
-    }
-    
-    let tags: string[] = [];
-    try {
-      tags = JSON.parse(jsonMatch[0]);
-      
-      // Ensure all returned tags are strings and remove any duplicates
-      tags = [...new Set(tags.filter(tag => typeof tag === 'string'))];
-      
-      // Ensure we aren't exceeding 12 tags total
-      tags = tags.slice(0, 12);
-      
-      // Create any new tags in the database if they don't exist
-      await Promise.all(tags.map(async (tagName) => {
-        try {
-          await Tag.findOneAndUpdate(
-            { name: tagName },
-            { 
-              $setOnInsert: { 
-                name: tagName,
-                description: `Tag related to Bengali culture: ${tagName}`,
-                createdBy: userId,
-                isSystemGenerated: true
-              },
-              $inc: { useCount: 1 }
+    // Save tags to DB as before
+    await Promise.all(tags.map(async (tagName) => {
+      try {
+        await Tag.findOneAndUpdate(
+          { name: tagName },
+          {
+            $setOnInsert: {
+              name: tagName,
+              description: `Tag related to Bengali culture: ${tagName}`,
+              createdBy: userId,
+              isSystemGenerated: true
             },
-            { upsert: true, new: true }
-          );
-        } catch (err) {
-          console.error(`Error creating/updating tag ${tagName}:`, err);
-        }
-      }));
-      
-    } catch (err) {
-      console.error('Error parsing JSON from Gemini response:', err);
-      return [];
-    }
-
+            $inc: { useCount: 1 }
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.error(`Error creating/updating tag ${tagName}:`, err);
+      }
+    }));
+    
     return tags;
   } catch (error) {
     console.error('Error generating tags with Gemini:', error);
@@ -262,7 +332,6 @@ export async function generateStoryForMedia(
     }
 
     // Create model and prepare image
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
     const generativePart = await fileToGenerativePart(filePath);
     
     // Extract file extension for context
@@ -296,9 +365,8 @@ export async function generateStoryForMedia(
 ${existingDescription ? 'The user describes this as: ' + existingDescription : ''}
 Tags associated with this ${mediaType}: ${tagsString}
 
-Please provide a rich cultural context, and describe what's depicted. Return your response in the following JSON structure:
-
-{
+Please provide a rich cultural context, and describe what's depicted. Return your response in ONLY a single valid JSON object.
+Example: {
   "title": "A short, engaging title for this ${mediaType}",
   "story": "A descriptive story about this ${mediaType} (150-200 words)",
   "culturalContext": "Brief explanation of the cultural significance (50-75 words)",
@@ -307,46 +375,28 @@ Please provide a rich cultural context, and describe what's depicted. Return you
 }`;
 
     // Send to Gemini
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [
-          { text: basePrompt },
-          generativePart
-        ]
-      }],
-      generationConfig: {
-        temperature: 0.6,
-        maxOutputTokens: 800,
-      },
-      safetySettings
+    const result = await genAI.models.generateContent({
+      model: VISION_MODEL_NAME,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: basePrompt },
+            generativePart
+          ]
+        }
+      ]
     });
 
     // Process the response
-    const responseText = result.response.text();
-    
-    // Extract JSON object from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('No valid JSON object found in the response:', responseText);
-      return { 
-        title: "Bengali Cultural Content",
-        story: "This content depicts aspects of Bengali culture and heritage.",
-        error: "Failed to generate complete story"
-      };
-    }
-    
-    try {
-      const story = JSON.parse(jsonMatch[0]);
-      return story;
-    } catch (err) {
-      console.error('Error parsing JSON from Gemini response:', err);
-      return { 
-        title: "Bengali Cultural Content",
-        story: responseText.substring(0, 200),
-        error: "Failed to parse story format"
-      };
-    }
+    const responseText = result.text ?? '';
+    const story = extractJson<Record<string, string>>(responseText, { 
+      title: "Bengali Cultural Content",
+      story: "This content depicts aspects of Bengali culture and heritage.",
+      error: "Failed to generate complete story"
+    });
+
+    return story;
   } catch (error) {
     console.error('Error generating story with Gemini:', error);
     return { 
@@ -355,9 +405,12 @@ Please provide a rich cultural context, and describe what's depicted. Return you
   }
 }
 
-export default {
-  generateTagsForMedia,
-  generateStoryForMedia,
-  BENGALI_CULTURE_TAGS,
-  ALL_BENGALI_TAGS
-};
+/**
+ * Extract Bengali tags from a given description using keyword matching.
+ * This is a utility function to find relevant Bengali cultural tags from a text.
+ */
+export function getBengaliTagsFromDescription(description: string): string[] {
+  if (!description) return [];
+  const descLower = description.toLowerCase();
+  return ALL_BENGALI_TAGS.filter(tag => descLower.includes(tag.toLowerCase()));
+}
