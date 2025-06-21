@@ -13,7 +13,7 @@ import {
   SummaryOptions,
   generateSummaryType
 } from '../utils/geminiSummary.js';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 
 // Extend the Express Request type to include files
 interface MulterRequest extends Request {
@@ -530,4 +530,92 @@ export const createPost = async (req: Request, res: Response) => {
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
+};
+
+export const toggleLike = async (req: Request, res: Response) => {
+    try {
+        const { postId } = req.params;
+        const userId = req.user?._id;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+        
+        const userObjectId = new mongoose.Types.ObjectId(userId as string);
+        const post = await Post.findById(postId);
+
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
+
+        const likesArray = post.likes as Types.DocumentArray<Types.ObjectId>;
+        const isLiked = likesArray.some(id => id.equals(userObjectId));
+
+        if (isLiked) {
+            // Unlike the post
+            likesArray.pull(userObjectId);
+        } else {
+            // Like the post
+            likesArray.push(userObjectId);
+        }
+
+        await post.save();
+
+        res.status(200).json({
+            message: `Post ${isLiked ? 'unliked' : 'liked'} successfully`,
+            likes: post.likes,
+        });
+
+    } catch (error) {
+        console.error('Error toggling like:', error);
+        res.status(500).json({
+            message: 'Internal server error',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+};
+
+export const addComment = async (req: Request, res: Response) => {
+    try {
+        const { postId } = req.params;
+        const { text } = req.body;
+        const userId = req.user?._id;
+        const userName = req.user?.name;
+
+        if (!userId || !userName) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        if (!text) {
+            return res.status(400).json({ message: 'Comment text is required' });
+        }
+
+        const post = await Post.findById(postId);
+
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
+
+        const newComment = {
+            userId,
+            userName,
+            text,
+            timestamp: new Date(),
+        };
+
+        post.comments.push(newComment);
+        await post.save();
+
+        res.status(201).json({
+            message: 'Comment added successfully',
+            comments: post.comments,
+        });
+
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        res.status(500).json({
+            message: 'Internal server error',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 };

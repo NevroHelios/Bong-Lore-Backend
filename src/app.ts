@@ -12,6 +12,7 @@ import eventroutes from './routes/eventroutes.js';
 import collectionroutes from './routes/collectionroutes.js';
 import vectorSearchRoutes from './routes/vectorSearchRoutes.js';
 import tagroutes from './routes/tagroutes.js';
+import userroutes from './routes/userroutes.js';
 import { connectDB } from './dbconfig/dbconnect.js';
 import User from './models/User.js';
 
@@ -116,6 +117,9 @@ app.use(
 
 // Tag routes
 app.use('/api/tags', tagroutes);
+
+// User routes
+app.use('/api/users', userroutes);
 
 // Global error handler
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {

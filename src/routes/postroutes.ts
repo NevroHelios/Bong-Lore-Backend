@@ -7,7 +7,9 @@ import {
   getPosts, 
   generatePostSummaryEndpoint,
   getNearbyPosts,
-  createPost
+  createPost,
+  toggleLike,
+  addComment
 } from "../controllers/postcontroller.js";
 import { authMiddleware, requireAuth } from "../middlewares/authmiddleware.js";
 
@@ -36,6 +38,12 @@ router.get("/", asyncHandler(getPosts));
 
 // Generate summary for existing post (protected)
 router.get("/:postId/generate-summary", authMiddleware, requireAuth, asyncHandler(generatePostSummaryEndpoint));
+
+// Toggle like on a post
+router.patch("/:postId/like", authMiddleware, requireAuth, asyncHandler(toggleLike));
+
+// Add a comment to a post
+router.post("/:postId/comments", authMiddleware, requireAuth, asyncHandler(addComment));
 
 // Get posts near the user's location (protected)
 router.get("/nearby", authMiddleware, requireAuth, asyncHandler(getNearbyPosts));

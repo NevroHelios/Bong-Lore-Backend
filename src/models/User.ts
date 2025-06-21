@@ -13,6 +13,7 @@ export interface IUser extends Document {
     type: 'Point';
     coordinates: number[]; // [longitude, latitude]
   };
+  bookmarkedPosts: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,7 +59,8 @@ const userSchema = new Schema<IUser>({
       type: [Number],
       default: [0, 0]
     }
-  }
+  },
+  bookmarkedPosts: [{ type: Schema.Types.ObjectId, ref: 'Post' }]
 }, {
   timestamps: true,
 });
