@@ -35,7 +35,7 @@ export const postVectorIndexDefinition = {
         },
         userId: { type: "string" },
         tags: { type: "string" },
-        visibility: { type: "string" },
+        visibility: { type: "token" },
         "aiSummary.summaryType": { type: "string" }
       }
     }

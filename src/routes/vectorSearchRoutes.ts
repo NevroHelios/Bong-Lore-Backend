@@ -8,7 +8,8 @@ import {
   generatePostEmbeddingsController,
   generateMediaEmbeddingsController,
   generateEventEmbeddingsController,
-  batchProcessPostsController
+  batchProcessPostsController,
+  searchSimilarPostsByPostId
 } from '../controllers/vectorSearchController.js';
 import { authMiddleware } from '../middlewares/authmiddleware.js';
 
@@ -39,6 +40,8 @@ router.post('/search/posts', asyncHandler(searchSimilarPosts));
 router.post('/search/events', asyncHandler(searchSimilarEvents));
 router.post('/search/media', asyncHandler(searchSimilarMedia));
 router.post('/search/cultural', asyncHandler(searchCulturallyRelevantContent));
+// Search for similar posts to a given postId (public)
+router.get('/search/similar/:postId', asyncHandler(searchSimilarPostsByPostId));
 
 // Generate embeddings (admin only)
 router.post('/embeddings/post/:postId', adminAuth, asyncHandler(generatePostEmbeddingsController));

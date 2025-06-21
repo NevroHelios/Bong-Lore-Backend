@@ -158,7 +158,7 @@ export async function generateTextEmbedding(text: string): Promise<number[] | nu
   }
   try {
     const response = await genAI.models.embedContent({
-      model: 'gemini-embedding-exp-03-07',
+      model: 'text-embedding-004',
       contents: text,
     });
     if (response.embeddings && response.embeddings.length > 0 && response.embeddings[0].values) {
@@ -180,7 +180,7 @@ export async function generateMultimodalEmbedding(filePath: string, description?
   try {
     const textToEmbed = `Visual content: ${path.basename(filePath)}. Description: ${description || 'No description provided.'}`;
     const response = await genAI.models.embedContent({
-      model: 'gemini-embedding-exp-03-07',
+      model: 'text-embedding-004',
       contents: textToEmbed,
     });
     if (response.embeddings && response.embeddings.length > 0 && response.embeddings[0].values) {
@@ -204,7 +204,7 @@ export async function generateCulturalEmbedding(text: string): Promise<number[] 
   try {
     const textToEmbed = `Cultural context of Bengal: ${text}`;
     const response = await genAI.models.embedContent({
-      model: 'gemini-embedding-exp-03-07',
+      model: 'text-embedding-004',
       contents: textToEmbed,
     });
     if (response.embeddings && response.embeddings.length > 0 && response.embeddings[0].values) {
