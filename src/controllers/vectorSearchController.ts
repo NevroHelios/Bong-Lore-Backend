@@ -12,6 +12,7 @@ import {
   generateEventEmbeddings,
   batchGeneratePostEmbeddings 
 } from '../utils/bengaliVectorGenerator.js';
+import Post from '../models/Post.js';
 
 /**
  * Initialize vector indexes for Bengali Heritage platform
@@ -337,4 +338,76 @@ export const batchProcessPostsController = async (req: Request, res: Response) =
       error: error instanceof Error ? error.message : String(error)
     });
   }
+};
+
+/**
+ * Find similar posts by post ID
+ */
+export const searchSimilarPostsByPostId = async (req: Request, res: Response) => {
+  const { postId } = req.params;
+  const limit = parseInt((req.query.limit as string) || '10');
+  const minScore = parseFloat((req.query.minScore as string) || '0.7');
+
+  // Fetch the selected post with location
+  const selectedPost = await Post.findById(postId);
+  if (!selectedPost) {
+    return res.status(404).json({ error: 'Post not found' });
+  }
+  const selectedLocation = selectedPost.location && selectedPost.location.coordinates;
+
+  // Try all embedding types and merge results
+  const embeddingTypes: Array<'text' | 'multimodal' | 'cultural'> = ['text', 'multimodal', 'cultural'];
+  let allResults: any[] = [];
+  for (const embedType of embeddingTypes) {
+    try {
+      const result = await findSimilarPosts({ postId, embedType, limit: limit * 2, minScore });
+      if (result && result.posts) {
+        allResults = allResults.concat(result.posts);
+      }
+    } catch (e) {
+      // Ignore missing embedding type
+    }
+  }
+  // Remove duplicates by _id
+  const uniqueResults = Object.values(
+    allResults.reduce((acc, post) => {
+      acc[String(post._id)] = post;
+      return acc;
+    }, {} as Record<string, any>)
+  );
+
+  // Calculate location distance (Haversine formula)
+  function getDistanceKm(coords1?: number[], coords2?: number[]) {
+    if (!coords1 || !coords2 || coords1.length !== 2 || coords2.length !== 2) return Number.MAX_VALUE;
+    const [lon1, lat1] = coords1;
+    const [lon2, lat2] = coords2;
+    const R = 6371; // km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  // Attach distance to each post
+  const postsWithDistance = (uniqueResults as any[]).map((post: any) => ({
+    ...post,
+    locationDistance: getDistanceKm(selectedLocation, post.location && post.location.coordinates)
+  }));
+
+  // Sort by location distance (ascending)
+  postsWithDistance.sort((a, b) => a.locationDistance - b.locationDistance);
+
+  // Remove the selected post from results if present
+  const filtered = postsWithDistance.filter(p => String(p._id) !== String(postId));
+
+  res.json({
+    selectedPost,
+    similarPosts: filtered.slice(0, limit),
+    count: filtered.length
+  });
 };
