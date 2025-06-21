@@ -14,6 +14,7 @@ import {
   generateSummaryType
 } from '../utils/geminiSummary.js';
 import mongoose, { Types } from 'mongoose';
+import mediaProcessor from '../utils/mediaProcessor.js';
 
 // Extend the Express Request type to include files
 interface MulterRequest extends Request {
@@ -60,6 +61,10 @@ export const createposts = async (req: MulterRequest, res: Response) => {
 
         // Create media items for each uploaded file
         const createdMediaItems = [];
+        let allTags: string[] = [];
+        let allTextEmbeddings: number[][] = [];
+        let allMultimodalEmbeddings: number[][] = [];
+        let allCulturalEmbeddings: number[][] = [];
         
         for (let i = 0; i < posts.length; i++) {
             const fileUrl = posts[i];
@@ -106,7 +111,20 @@ export const createposts = async (req: MulterRequest, res: Response) => {
             });
 
             const savedMediaItem = await newMediaItem.save();
-            createdMediaItems.push(savedMediaItem);
+            // Process with Gemini for tags and embeddings
+            const geminiResult = await mediaProcessor.processMediaWithGemini(
+                (savedMediaItem._id as mongoose.Types.ObjectId).toString(),
+                (existingUser._id as mongoose.Types.ObjectId).toString()
+            );
+            if (geminiResult && geminiResult.tags) {
+                allTags = allTags.concat(geminiResult.tags);
+            }
+            if (geminiResult && geminiResult.media) {
+                if (geminiResult.media.textEmbedding) allTextEmbeddings.push(geminiResult.media.textEmbedding);
+                if (geminiResult.media.multimodalEmbedding) allMultimodalEmbeddings.push(geminiResult.media.multimodalEmbedding);
+                if (geminiResult.media.culturalEmbedding) allCulturalEmbeddings.push(geminiResult.media.culturalEmbedding);
+            }
+            createdMediaItems.push(geminiResult && geminiResult.media ? geminiResult.media : savedMediaItem);
         }
 
         // Create a Post document that groups these media items
@@ -130,13 +148,16 @@ export const createposts = async (req: MulterRequest, res: Response) => {
             title: postTitle,
             description: postDescription,
             mediaItems: createdMediaItems.map(item => item._id),
-            tags: postTags,
+            tags: Array.from(new Set(allTags)),
             location: postLocation,
             likes: [],
             comments: [],
             collections: [],
             featured: false,
-            visibility: req.body.visibility || 'public'
+            visibility: req.body.visibility || 'public',
+            textEmbedding: allTextEmbeddings.length > 0 ? allTextEmbeddings[0] : undefined,
+            multimodalEmbedding: allMultimodalEmbeddings.length > 0 ? allMultimodalEmbeddings[0] : undefined,
+            culturalEmbedding: allCulturalEmbeddings.length > 0 ? allCulturalEmbeddings[0] : undefined
         });
 
         const savedPost = await newPost.save();

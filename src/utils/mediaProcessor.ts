@@ -1,15 +1,15 @@
-import geminiVision from './geminiVision.js';
+import {
+  generateTagsForMedia,
+  generateStoryForMedia,
+  ALL_BENGALI_TAGS,
+  BENGALI_CULTURE_TAGS,
+  generateTextEmbedding,
+  generateMultimodalEmbedding,
+  generateCulturalEmbedding
+} from './geminiVision.js';
 import mongoose from 'mongoose';
 import MediaItem from '../models/MediaItem.js';
 import Tag from '../models/Tag.js';
-
-// Destructure the imported functions and constants
-const { 
-  generateTagsForMedia,
-  generateStoryForMedia,
-  ALL_BENGALI_TAGS, 
-  BENGALI_CULTURE_TAGS 
-} = geminiVision;
 
 /**
  * Process a new media item with Gemini Vision
@@ -35,15 +35,35 @@ export async function processMediaWithGemini(
     // Generate tags using Gemini Vision
     console.log(`Generating tags for media: ${mediaId}`);
     const tags = await generateTagsForMedia(filePath, userId, media.description);
-    
+
+    // Generate Bengali tags
+    let bengaliTags: string[] = [];
+    if (media.description) {
+      bengaliTags = ALL_BENGALI_TAGS.filter(tag =>
+        media?.description?.toLowerCase().includes(tag.toLowerCase())
+      );
+    }
+
     // Generate story using Gemini Vision
     console.log(`Generating story for media: ${mediaId}`);
     const story = await generateStoryForMedia(filePath, tags, media.description);
-    
-    // Update media item with tags and story
+
+    // Generate embeddings using Gemini Vision
+    const descriptionForEmbedding = media.description || story.summary || story.title || '';
+    const [textEmbedding, multimodalEmbedding, culturalEmbedding] = await Promise.all([
+      generateTextEmbedding(descriptionForEmbedding),
+      generateMultimodalEmbedding(filePath, descriptionForEmbedding),
+      generateCulturalEmbedding(descriptionForEmbedding)
+    ]);
+
+    // Update media item with tags, bengaliTags, story, and embeddings
     const updateData: any = {
       tags,
-      geminiStory: story
+      bengaliTags,
+      geminiStory: story,
+      ...(textEmbedding ? { textEmbedding } : {}),
+      ...(multimodalEmbedding ? { multimodalEmbedding } : {}),
+      ...(culturalEmbedding ? { culturalEmbedding } : {})
     };
     
     // If media doesn't have a title yet, use the title from the story
