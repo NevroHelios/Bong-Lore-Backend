@@ -19,5 +19,5 @@ export const config = {
     googleClientId,
     googleClientSecret,
     callbackURL,
-    postLogoutRedirectUrl: 'http://192.168.174.91/(auth)/login' // Frontend login page
+    postLogoutRedirectUrl: 'http://192.168.233.236/(auth)/login' // Frontend login page
 };

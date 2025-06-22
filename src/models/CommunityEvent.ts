@@ -11,15 +11,15 @@ export interface ICommunityEvent extends Document {
   date: Date;
   endDate?: Date;
   location: {
-    latitude: number;
-    longitude: number;
     name: string;
     address?: string;
+    link?: string;
   };
   
   // Media and content
   mediaItems: Types.ObjectId[]; // References to MediaItem documents
   coverImage?: string; // Cloudinary URL for event cover
+  posts: Types.ObjectId[]; // References to associated Post documents
   
   // Participation
   participants: Types.ObjectId[]; // User IDs who participated
@@ -83,10 +83,9 @@ export interface ICommunityEvent extends Document {
 }
 
 const locationSchema = new Schema({
-  latitude: { type: Number, required: true },
-  longitude: { type: Number, required: true },
   name: { type: String, required: true },
-  address: { type: String }
+  address: { type: String },
+  link : { type: String }, // Optional link to a map or location
 }, { _id: false });
 
 const participationSchema = new Schema({
@@ -152,7 +151,8 @@ const communityEventSchema = new Schema<ICommunityEvent>({
   
   // Media
   mediaItems: [{ type: Schema.Types.ObjectId, ref: 'MediaItem' }],
-  coverImage: { type: String }, // Cloudinary URL
+  coverImage: { type: Buffer }, // Cloudinary URL
+  posts: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
   
   // Participation
   participants: [{ type: Schema.Types.ObjectId, ref: 'User' }],
@@ -213,9 +213,8 @@ const communityEventSchema = new Schema<ICommunityEvent>({
 communityEventSchema.index({ organizerId: 1, createdAt: -1 });
 communityEventSchema.index({ date: 1, status: 1 });
 communityEventSchema.index({ eventType: 1, visibility: 1 });
-communityEventSchema.index({ 'location.latitude': 1, 'location.longitude': 1 });
+communityEventSchema.index({ 'locationName': 1 });
 communityEventSchema.index({ status: 1, date: 1 });
-communityEventSchema.index({ tags: 1, culturalTags: 1 });
 
 // Text search index
 communityEventSchema.index({
