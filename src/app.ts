@@ -8,7 +8,7 @@ import { authMiddleware } from './middlewares/authmiddleware.js';
 import authrouter from './routes/authroutes.js';
 import mediaProcessingRoutes from './routes/mediaProcessingRoutes.js';
 import postroutes from './routes/postroutes.js';
-import eventroutes from './routes/eventroutes.js';
+import eventroutes from './routes/communityEventRoutes.js';
 import collectionroutes from './routes/collectionroutes.js';
 import vectorSearchRoutes from './routes/vectorSearchRoutes.js';
 import tagroutes from './routes/tagroutes.js';

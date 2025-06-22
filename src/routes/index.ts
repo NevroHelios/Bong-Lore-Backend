@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import postroutes from './postroutes.js';
-import eventroutes from './eventroutes.js';
+import eventroutes from './communityEventRoutes.js';
 import collectionroutes from './collectionroutes.js';
 import quizRoutes from './quizroutes.js';
 
