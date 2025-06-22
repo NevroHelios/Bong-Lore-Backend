@@ -18,7 +18,7 @@ The বঙ্গ-Lore backend serves as the digital backbone for Bengali cultura
 ## 🚀 Key Features
 
 ### Authentication & User Management
-- **Civic Auth Integration**: Secure identity verification for cultural communities
+- **jwt way of auth**: Secure identity verification for cultural communities
 - **Multi-tier Accounts**: Personal, business, and cultural organization profiles
 - **Bengali Profile Support**: Native language profile management
 - **Role-based Access**: Granular permissions for different user types
